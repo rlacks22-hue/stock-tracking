@@ -353,15 +353,20 @@ def render_chart_section(cfg):
     ref = st.session_state.get(ref_key)
     cur_price = float(df["Close"].iloc[-1])
 
+    # 장 마감/주말 등 거래 없는 구간이 빈 칸으로 끊겨 보이지 않도록
+    # 날짜/시간축을 카테고리(문자열) 축으로 그린다.
+    label_fmt = "%m-%d %H:%M" if interval in ("5m", "30m") else "%Y-%m-%d"
+    x_labels = df.index.strftime(label_fmt)
+
     fig = go.Figure(data=[
         go.Candlestick(
-            x=df.index, open=df["Open"], high=df["High"], low=df["Low"], close=df["Close"],
+            x=x_labels, open=df["Open"], high=df["High"], low=df["Low"], close=df["Close"],
             name=item["ticker"],
             increasing_line_color=UP_COLOR, increasing_fillcolor=UP_COLOR,
             decreasing_line_color=DOWN_COLOR, decreasing_fillcolor=DOWN_COLOR,
         ),
         go.Scatter(
-            x=df.index, y=df["Close"], mode="markers",
+            x=x_labels, y=df["Close"], mode="markers",
             marker=dict(size=10, opacity=0), name="", hoverinfo="skip", showlegend=False,
         ),
     ])
@@ -375,7 +380,9 @@ def render_chart_section(cfg):
     fig.update_layout(
         xaxis_rangeslider_visible=False, height=450,
         margin=dict(l=10, r=10, t=30, b=10),
+        xaxis_type="category",
     )
+    fig.update_xaxes(nticks=12)
     event = st.plotly_chart(
         fig, use_container_width=True, on_select="rerun", selection_mode="points",
         key=f"chart_widget_{item['ticker']}_{period_label}",
