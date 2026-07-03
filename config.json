@@ -28,7 +28,9 @@
       "ticker": "005930",
       "name": "삼성전자",
       "market": "KR",
-      "overrides": {}
+      "overrides": {
+        "PER": 124.0
+      }
     },
     {
       "ticker": "000660",
