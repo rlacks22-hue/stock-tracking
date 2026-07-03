@@ -64,6 +64,12 @@
           "name": "마소",
           "market": "US",
           "overrides": {}
+        },
+        {
+          "ticker": "META",
+          "name": "메타",
+          "market": "US",
+          "overrides": {}
         }
       ]
     }
