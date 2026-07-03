@@ -10,7 +10,7 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import plotly.graph_objects as go
-from st_aggrid import AgGrid, GridOptionsBuilder, JsCode, GridUpdateMode, DataReturnMode
+from st_aggrid import AgGrid, GridOptionsBuilder, JsCode, DataReturnMode
 import json
 import os
 import base64
@@ -48,9 +48,21 @@ def load_config():
         with open(CONFIG_PATH, "r", encoding="utf-8") as f:
             cfg = json.load(f)
     else:
-        cfg = {"portfolio": [], "watchlist": []}
-    for key in ("portfolio", "watchlist"):
-        cfg[key] = [_migrate_item(it) for it in cfg.get(key, [])]
+        cfg = {}
+
+    if "groups" not in cfg:
+        # 예전 portfolio/watchlist 구조 → 자유 그룹 구조로 마이그레이션
+        groups = []
+        if cfg.get("portfolio"):
+            groups.append({"name": "포폴1", "items": cfg["portfolio"]})
+        if cfg.get("watchlist"):
+            groups.append({"name": "관심종목", "items": cfg["watchlist"]})
+        if not groups:
+            groups = [{"name": "포폴1", "items": []}]
+        cfg = {"groups": groups}
+
+    for g in cfg["groups"]:
+        g["items"] = [_migrate_item(it) for it in g.get("items", [])]
     return cfg
 
 def _push_config_to_github(cfg, token):
@@ -215,9 +227,10 @@ def render_table(items, empty_msg, table_key):
 
     gb = GridOptionsBuilder.from_dataframe(df)
     gb.configure_default_column(resizable=True, filter=False, sortable=True)
+    gb.configure_grid_options(rowDragManaged=True, animateRows=True)
     for col in COLUMN_ORDER:
         if col in ("종목", "티커"):
-            gb.configure_column(col, editable=False)
+            gb.configure_column(col, editable=False, rowDrag=(col == "종목"))
             continue
         decimals, signed = COLUMN_FORMATS[col]
         editable = col in EDITABLE_COLS
@@ -235,22 +248,29 @@ def render_table(items, empty_msg, table_key):
     grid_options = gb.build()
     response = AgGrid(
         df, gridOptions=grid_options, key=f"aggrid_{table_key}",
-        update_mode=GridUpdateMode.VALUE_CHANGED,
+        update_on=["cellValueChanged", "rowDragEnd"],
         data_return_mode=DataReturnMode.AS_INPUT,
         allow_unsafe_jscode=True, fit_columns_on_grid_load=True,
         reload_data=True,
         height=min(60 + 42 * len(rows), 480),
     )
-    st.caption("🟨 노란색 셀 = 수기 입력값 · 셀을 더블클릭하면 직접 수정할 수 있습니다.")
+    st.caption("🟨 노란색 셀 = 수기 입력값 · 더블클릭하면 직접 수정 · 종목명을 드래그하면 순서를 바꿀 수 있습니다.")
 
     edited = response["data"]
+    ticker_to_item = {it["ticker"]: it for it in items}
+    old_rows_by_ticker = {r["티커"]: r for r in df.to_dict("records")}
+
     changed = False
-    for i, item in enumerate(items):
+    for _, erow in edited.iterrows():
+        item = ticker_to_item.get(erow["티커"])
+        if item is None:
+            continue
         overrides = item.setdefault("overrides", {})
+        old_row = old_rows_by_ticker.get(erow["티커"], {})
         for col in EDITABLE_COLS:
-            old_val = df.iloc[i][col]
-            new_val = edited.iloc[i][col]
-            old_num = None if pd.isna(old_val) else float(old_val)
+            old_val = old_row.get(col)
+            new_val = erow[col]
+            old_num = None if (old_val is None or pd.isna(old_val)) else float(old_val)
             new_num = None if pd.isna(new_val) else float(new_val)
             if new_num != old_num:
                 if new_num is None:
@@ -258,6 +278,14 @@ def render_table(items, empty_msg, table_key):
                 else:
                     overrides[col] = new_num
                 changed = True
+
+    new_order = list(edited["티커"])
+    old_order = list(df["티커"])
+    if new_order != old_order and set(new_order) == set(old_order):
+        order_index = {t: i for i, t in enumerate(new_order)}
+        items.sort(key=lambda it: order_index.get(it["ticker"], 0))
+        changed = True
+
     if changed:
         save_config(cfg)
         st.rerun()
@@ -266,8 +294,8 @@ def run_automation(cfg):
     """실시간으로 가져올 수 있는 값은 자동값으로 되돌리고,
     가져올 수 없는 값은 수기입력값을 그대로 남긴다."""
     st.cache_data.clear()
-    for key in ("portfolio", "watchlist"):
-        for item in cfg[key]:
+    for group in cfg["groups"]:
+        for item in group["items"]:
             info = fetch_one(item["ticker"], item.get("market", "US"))
             if "_error" in info:
                 continue
@@ -302,7 +330,7 @@ def fetch_history(ticker: str, market: str, period: str, interval: str) -> pd.Da
 
 def render_chart_section(cfg):
     st.subheader("📈 차트")
-    items = cfg["portfolio"] + cfg["watchlist"]
+    items = [it for g in cfg["groups"] for it in g["items"]]
     if not items:
         st.info("왼쪽 사이드바에서 종목을 추가하면 차트를 볼 수 있습니다.")
         return
@@ -370,8 +398,17 @@ def render_chart_section(cfg):
     else:
         st.caption("💡 차트 위의 한 지점을 클릭하면 그 시점 대비 현재가 등락률을 볼 수 있습니다.")
 
-# ---------- Sidebar: manage stocks ----------
+# ---------- Sidebar: manage groups & stocks ----------
 cfg = load_config()
+group_names = [g["name"] for g in cfg["groups"]]
+
+# active_group 위젯이 이미 생성된 뒤에는 st.session_state["active_group"]를
+# 직접 바꿀 수 없으므로, pending 값을 위젯 생성 "전"에 반영한다.
+if "pending_active_group" in st.session_state:
+    st.session_state["active_group"] = st.session_state.pop("pending_active_group")
+
+if st.session_state.get("active_group") not in group_names:
+    st.session_state["active_group"] = group_names[0]
 
 with st.sidebar:
     st.header("⚙️ 종목 관리")
@@ -380,37 +417,67 @@ with st.sidebar:
     else:
         st.caption("💾 로컬 저장만 (재시작 시 초기화될 수 있음)")
 
-    tabs = st.tabs(["포트폴리오", "관심종목"])
-    tab_defs = [(tabs[0], "portfolio", "포트폴리오"), (tabs[1], "watchlist", "관심종목")]
+    active_name = st.radio("포트폴리오 선택", group_names, key="active_group")
+    active_idx = group_names.index(active_name)
+    group = cfg["groups"][active_idx]
 
-    for tab, key, label in tab_defs:
-        with tab:
-            for i, item in enumerate(cfg[key]):
-                c1, c2 = st.columns([5, 1])
-                with c1:
-                    st.markdown(f"**{item.get('name', item['ticker'])}** `{item['ticker']}` ({item.get('market','US')})")
-                with c2:
-                    if st.button("🗑", key=f"del_{key}_{i}"):
-                        cfg[key].pop(i)
-                        save_config(cfg)
-                        st.rerun()
+    for i, item in enumerate(group["items"]):
+        c1, c2 = st.columns([5, 1])
+        with c1:
+            st.markdown(f"**{item.get('name', item['ticker'])}** `{item['ticker']}` ({item.get('market','US')})")
+        with c2:
+            if st.button("🗑", key=f"del_{active_idx}_{i}"):
+                group["items"].pop(i)
+                save_config(cfg)
+                st.rerun()
 
-            with st.expander(f"➕ {label}에 추가"):
-                with st.form(f"add_{key}", clear_on_submit=True):
-                    t = st.text_input("티커 (예: NVDA, 005930)")
-                    n = st.text_input("표시할 이름 (예: 엔비디아)")
-                    m = st.radio("시장", ["US", "KR"], horizontal=True, key=f"m_{key}")
-                    fp = st.number_input("적정PER (없으면 0)", value=0.0, step=0.5, format="%.1f")
-                    if st.form_submit_button("추가"):
-                        if t.strip():
-                            cfg[key].append({
-                                "ticker": t.strip().upper() if m == "US" else t.strip(),
-                                "name": n.strip() or t.strip(),
-                                "market": m,
-                                "overrides": {"적정PER": fp} if fp > 0 else {},
-                            })
-                            save_config(cfg)
-                            st.rerun()
+    with st.expander(f"➕ {active_name}에 종목 추가"):
+        with st.form(f"add_{active_idx}", clear_on_submit=True):
+            t = st.text_input("티커 (예: NVDA, 005930)")
+            n = st.text_input("표시할 이름 (예: 엔비디아)")
+            m = st.radio("시장", ["US", "KR"], horizontal=True, key=f"m_{active_idx}")
+            fp = st.number_input("적정PER (없으면 0)", value=0.0, step=0.5, format="%.1f")
+            if st.form_submit_button("추가"):
+                if t.strip():
+                    group["items"].append({
+                        "ticker": t.strip().upper() if m == "US" else t.strip(),
+                        "name": n.strip() or t.strip(),
+                        "market": m,
+                        "overrides": {"적정PER": fp} if fp > 0 else {},
+                    })
+                    save_config(cfg)
+                    st.rerun()
+
+    st.divider()
+    with st.expander("📁 그룹(포폴) 관리"):
+        new_name = st.text_input("이름 변경", value=active_name, key=f"rename_{active_idx}")
+        if st.button("이름 저장", key=f"rename_btn_{active_idx}"):
+            new_name = new_name.strip()
+            if new_name and new_name != active_name and new_name not in group_names:
+                group["name"] = new_name
+                save_config(cfg)
+                st.session_state["pending_active_group"] = new_name
+                st.rerun()
+
+        if len(cfg["groups"]) > 1:
+            if st.button(f"🗑 '{active_name}' 그룹 전체 삭제"):
+                cfg["groups"].pop(active_idx)
+                save_config(cfg)
+                st.session_state["pending_active_group"] = cfg["groups"][0]["name"]
+                st.rerun()
+        else:
+            st.caption("그룹이 하나뿐이면 삭제할 수 없습니다.")
+
+        st.markdown("---")
+        with st.form("add_group", clear_on_submit=True):
+            new_group_name = st.text_input("새 그룹 이름 (예: 포폴2)")
+            if st.form_submit_button("➕ 그룹 추가"):
+                new_group_name = new_group_name.strip()
+                if new_group_name and new_group_name not in group_names:
+                    cfg["groups"].append({"name": new_group_name, "items": []})
+                    save_config(cfg)
+                    st.session_state["pending_active_group"] = new_group_name
+                    st.rerun()
 
 # ---------- Main ----------
 st.title("📊 챠니의 주식 check~♬")
@@ -427,18 +494,8 @@ with c2:
 with c3:
     st.caption(f"마지막 업데이트: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} · 시세 캐시 5분")
 
-st.subheader("💼 포트폴리오")
-render_table(cfg["portfolio"], "왼쪽 사이드바에서 종목을 추가하세요.", "portfolio")
-
-st.divider()
-hc1, hc2 = st.columns([5, 1])
-with hc1:
-    st.subheader("👀 관심종목")
-with hc2:
-    show_watchlist = st.toggle("보이기", value=st.session_state.get("show_watchlist", True))
-    st.session_state["show_watchlist"] = show_watchlist
-if show_watchlist:
-    render_table(cfg["watchlist"], "왼쪽 사이드바에서 종목을 추가하세요.", "watchlist")
+st.subheader(f"💼 {active_name}")
+render_table(group["items"], "왼쪽 사이드바에서 종목을 추가하세요.", f"group_{active_idx}")
 
 st.divider()
 render_chart_section(cfg)
