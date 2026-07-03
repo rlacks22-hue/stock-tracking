@@ -42,6 +42,12 @@
           }
         },
         {
+          "ticker": "TSM",
+          "name": "tsmc",
+          "market": "US",
+          "overrides": {}
+        },
+        {
           "ticker": "AAPL",
           "name": "애플",
           "market": "US",
@@ -50,12 +56,6 @@
         {
           "ticker": "AVGO",
           "name": "브로드컴",
-          "market": "US",
-          "overrides": {}
-        },
-        {
-          "ticker": "TSM",
-          "name": "tsmc",
           "market": "US",
           "overrides": {}
         },
