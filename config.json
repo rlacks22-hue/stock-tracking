@@ -4,37 +4,41 @@
       "ticker": "NVDA",
       "name": "엔비디아",
       "market": "US",
-      "fair_per": 30.0
+      "overrides": {
+        "적정PER": 30.0
+      }
     },
     {
       "ticker": "MU",
       "name": "마이크론",
       "market": "US",
-      "fair_per": null
+      "overrides": {
+        "적정PER": 123.0
+      }
     },
     {
       "ticker": "PLTR",
       "name": "팔란티어",
       "market": "US",
-      "fair_per": null
+      "overrides": {}
     },
     {
       "ticker": "005930",
       "name": "삼성전자",
       "market": "KR",
-      "fair_per": null
+      "overrides": {}
     },
     {
       "ticker": "000660",
       "name": "SK하이닉스",
       "market": "KR",
-      "fair_per": null
+      "overrides": {}
     },
     {
       "ticker": "AAPL",
       "name": "애플",
       "market": "US",
-      "fair_per": null
+      "overrides": {}
     }
   ],
   "watchlist": []
