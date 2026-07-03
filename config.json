@@ -1,0 +1,35 @@
+{
+  "portfolio": [
+    {
+      "ticker": "NVDA",
+      "name": "엔비디아",
+      "market": "US",
+      "fair_per": null
+    },
+    {
+      "ticker": "MU",
+      "name": "마이크론",
+      "market": "US",
+      "fair_per": null
+    },
+    {
+      "ticker": "PLTR",
+      "name": "팔란티어",
+      "market": "US",
+      "fair_per": null
+    },
+    {
+      "ticker": "005930",
+      "name": "삼성전자",
+      "market": "KR",
+      "fair_per": null
+    },
+    {
+      "ticker": "000660",
+      "name": "SK하이닉스",
+      "market": "KR",
+      "fair_per": null
+    }
+  ],
+  "watchlist": []
+}
