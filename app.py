@@ -7,6 +7,7 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
+import plotly.graph_objects as go
 import json
 import os
 import base64
@@ -128,6 +129,45 @@ def build_row(item: dict) -> dict:
         "내상승%": upside_my,
     }
 
+@st.cache_data(ttl=3600, show_spinner=False)
+def fetch_history(ticker: str, market: str, period: str) -> pd.DataFrame:
+    yf_symbol = f"{ticker}.KS" if market == "KR" else ticker
+    try:
+        return yf.Ticker(yf_symbol).history(period=period, interval="1wk")
+    except Exception:
+        return pd.DataFrame()
+
+def render_chart_section(cfg):
+    st.subheader("📈 주간 차트")
+    items = cfg["portfolio"] + cfg["watchlist"]
+    if not items:
+        st.info("왼쪽 사이드바에서 종목을 추가하면 차트를 볼 수 있습니다.")
+        return
+
+    options = {f"{it.get('name', it['ticker'])} ({it['ticker']})": it for it in items}
+    c1, c2 = st.columns([2, 1])
+    with c1:
+        label = st.selectbox("종목 선택", list(options.keys()))
+    with c2:
+        period_map = {"6개월": "6mo", "1년": "1y", "3년": "3y", "5년": "5y"}
+        period_label = st.radio("기간", list(period_map.keys()), index=1, horizontal=True)
+
+    item = options[label]
+    df = fetch_history(item["ticker"], item.get("market", "US"), period_map[period_label])
+    if df.empty:
+        st.warning("차트 데이터를 불러오지 못했습니다.")
+        return
+
+    fig = go.Figure(data=[go.Candlestick(
+        x=df.index, open=df["Open"], high=df["High"], low=df["Low"], close=df["Close"],
+        name=item["ticker"],
+    )])
+    fig.update_layout(
+        xaxis_rangeslider_visible=False, height=450,
+        margin=dict(l=10, r=10, t=30, b=10),
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
 def render_table(items, title, empty_msg):
     st.subheader(title)
     if not items:
@@ -215,6 +255,8 @@ with c2:
 render_table(cfg["portfolio"], "💼 포트폴리오", "왼쪽 사이드바에서 종목을 추가하세요.")
 st.divider()
 render_table(cfg["watchlist"], "👀 관심종목", "왼쪽 사이드바에서 종목을 추가하세요.")
+st.divider()
+render_chart_section(cfg)
 
 with st.expander("ℹ️ 데이터 안내"):
     st.markdown("""
