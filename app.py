@@ -228,6 +228,7 @@ def render_table(items, empty_msg, table_key):
     gb = GridOptionsBuilder.from_dataframe(df)
     gb.configure_default_column(resizable=True, filter=False, sortable=True)
     gb.configure_grid_options(rowDragManaged=True, animateRows=True)
+    gb.configure_selection(selection_mode="single", use_checkbox=False, suppressRowClickSelection=False)
     for col in COLUMN_ORDER:
         if col in ("종목", "티커"):
             gb.configure_column(col, editable=False, rowDrag=(col == "종목"))
@@ -248,13 +249,18 @@ def render_table(items, empty_msg, table_key):
     grid_options = gb.build()
     response = AgGrid(
         df, gridOptions=grid_options, key=f"aggrid_{table_key}",
-        update_on=["cellValueChanged", "rowDragEnd"],
+        update_on=["cellValueChanged", "rowDragEnd", "selectionChanged"],
         data_return_mode=DataReturnMode.AS_INPUT,
         allow_unsafe_jscode=True, fit_columns_on_grid_load=True,
         reload_data=True,
         height=min(60 + 42 * len(rows), 480),
     )
-    st.caption("🟨 노란색 셀 = 수기 입력값 · 더블클릭하면 직접 수정 · 종목명을 드래그하면 순서를 바꿀 수 있습니다.")
+    st.caption("🟨 노란색 셀 = 수기 입력값 · 더블클릭하면 직접 수정 · 종목명을 드래그하면 순서를 바꿀 수 있습니다 · 행을 클릭하면 아래 차트가 바뀝니다.")
+
+    selected = response.selected_data
+    if selected is not None and not selected.empty:
+        srow = selected.iloc[0]
+        st.session_state["chart_stock_select"] = f"{srow['종목']} ({srow['티커']})"
 
     edited = response["data"]
     ticker_to_item = {it["ticker"]: it for it in items}
@@ -309,13 +315,14 @@ def run_automation(cfg):
 
 # ---------- Chart ----------
 PERIOD_OPTIONS = {
-    "1일": ("1d", "5m"),
-    "7일": ("7d", "30m"),
-    "30일": ("1mo", "1d"),
-    "6개월": ("6mo", "1wk"),
-    "1년": ("1y", "1wk"),
-    "3년": ("3y", "1wk"),
-    "5년": ("5y", "1wk"),
+    "1d": ("1d", "5m"),
+    "1w": ("7d", "30m"),
+    "1m": ("1mo", "1d"),
+    "3m": ("3mo", "1d"),
+    "6m": ("6mo", "1wk"),
+    "1y": ("1y", "1wk"),
+    "3y": ("3y", "1wk"),
+    "5y": ("5y", "1wk"),
 }
 UP_COLOR = "#e74c3c"    # 상승 = 빨간색
 DOWN_COLOR = "#2980b9"  # 하락 = 파란색
@@ -336,11 +343,13 @@ def render_chart_section(cfg):
         return
 
     options = {f"{it.get('name', it['ticker'])} ({it['ticker']})": it for it in items}
+    if st.session_state.get("chart_stock_select") not in options:
+        st.session_state["chart_stock_select"] = list(options.keys())[0]
     c1, c2 = st.columns([2, 1])
     with c1:
-        label = st.selectbox("종목 선택", list(options.keys()))
+        label = st.selectbox("종목 선택", list(options.keys()), key="chart_stock_select")
     with c2:
-        period_label = st.radio("기간", list(PERIOD_OPTIONS.keys()), index=4, horizontal=True)
+        period_label = st.radio("기간", list(PERIOD_OPTIONS.keys()), index=5, horizontal=True)
 
     item = options[label]
     period, interval = PERIOD_OPTIONS[period_label]
