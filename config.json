@@ -28,18 +28,18 @@
           }
         },
         {
+          "ticker": "000660",
+          "name": "SK하이닉스",
+          "market": "KR",
+          "overrides": {}
+        },
+        {
           "ticker": "005930",
           "name": "삼성전자",
           "market": "KR",
           "overrides": {
             "PER": 124.0
           }
-        },
-        {
-          "ticker": "000660",
-          "name": "SK하이닉스",
-          "market": "KR",
-          "overrides": {}
         },
         {
           "ticker": "AAPL",
