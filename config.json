@@ -4,7 +4,7 @@
       "ticker": "NVDA",
       "name": "엔비디아",
       "market": "US",
-      "fair_per": 0.5
+      "fair_per": 1.0
     },
     {
       "ticker": "MU",
