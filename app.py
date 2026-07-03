@@ -206,8 +206,7 @@ COLUMN_ORDER = [
     "적정PER", "내목표가", "내상승%",
 ]
 
-def render_table(items, title, empty_msg, table_key):
-    st.subheader(title)
+def render_table(items, empty_msg, table_key):
     if not items:
         st.info(empty_msg)
         return
@@ -252,6 +251,7 @@ def render_table(items, title, empty_msg, table_key):
         update_mode=GridUpdateMode.VALUE_CHANGED,
         data_return_mode=DataReturnMode.AS_INPUT,
         allow_unsafe_jscode=True, fit_columns_on_grid_load=True,
+        reload_data=True,
         height=min(60 + 42 * len(rows), 480),
     )
     st.caption("🟨 노란색 셀 = 수기 입력값 · 셀을 더블클릭하면 직접 수정할 수 있습니다.")
@@ -342,21 +342,17 @@ with st.sidebar:
     else:
         st.caption("💾 로컬 저장만 (재시작 시 초기화될 수 있음)")
 
-    show_watchlist = st.toggle("👀 관심종목 탭 보이기", value=st.session_state.get("show_watchlist", True))
-    st.session_state["show_watchlist"] = show_watchlist
-
-    tab_labels = ["포트폴리오", "관심종목"] if show_watchlist else ["포트폴리오"]
-    tabs = st.tabs(tab_labels)
-    tab_defs = [(tabs[0], "portfolio", "포트폴리오")]
-    if show_watchlist:
-        tab_defs.append((tabs[1], "watchlist", "관심종목"))
+    tabs = st.tabs(["포트폴리오", "관심종목"])
+    tab_defs = [(tabs[0], "portfolio", "포트폴리오"), (tabs[1], "watchlist", "관심종목")]
 
     for tab, key, label in tab_defs:
         with tab:
             for i, item in enumerate(cfg[key]):
-                with st.container(border=True):
+                c1, c2 = st.columns([5, 1])
+                with c1:
                     st.markdown(f"**{item.get('name', item['ticker'])}** `{item['ticker']}` ({item.get('market','US')})")
-                    if st.button("🗑 삭제", key=f"del_{key}_{i}"):
+                with c2:
+                    if st.button("🗑", key=f"del_{key}_{i}"):
                         cfg[key].pop(i)
                         save_config(cfg)
                         st.rerun()
@@ -393,10 +389,18 @@ with c2:
 with c3:
     st.caption(f"마지막 업데이트: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} · 시세 캐시 5분")
 
-render_table(cfg["portfolio"], "💼 포트폴리오", "왼쪽 사이드바에서 종목을 추가하세요.", "portfolio")
-if st.session_state.get("show_watchlist", True):
-    st.divider()
-    render_table(cfg["watchlist"], "👀 관심종목", "왼쪽 사이드바에서 종목을 추가하세요.", "watchlist")
+st.subheader("💼 포트폴리오")
+render_table(cfg["portfolio"], "왼쪽 사이드바에서 종목을 추가하세요.", "portfolio")
+
+st.divider()
+hc1, hc2 = st.columns([5, 1])
+with hc1:
+    st.subheader("👀 관심종목")
+with hc2:
+    show_watchlist = st.toggle("보이기", value=st.session_state.get("show_watchlist", True))
+    st.session_state["show_watchlist"] = show_watchlist
+if show_watchlist:
+    render_table(cfg["watchlist"], "왼쪽 사이드바에서 종목을 추가하세요.", "watchlist")
 
 st.divider()
 render_chart_section(cfg)
