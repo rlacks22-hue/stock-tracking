@@ -273,7 +273,7 @@ def render_table(items, empty_msg, table_key):
             type=["numericColumn"],
             valueFormatter=_js_fmt(
                 decimals, signed,
-                market_aware=(col in PRICE_COLS), percent=(col == "상승여력"),
+                market_aware=(col in PRICE_COLS), percent=(col in ("상승여력", "등락%")),
             ),
         )
         if editable:
