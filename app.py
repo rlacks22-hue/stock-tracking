@@ -26,7 +26,7 @@ GITHUB_BRANCH = "chance-home"
 # 표에서 직접 수정 가능한 항목 (수기입력값은 overrides 에 저장됨)
 EDITABLE_COLS = [
     "현재가", "PER", "Fwd PER", "PBR", "PEG", "EPS", "Fwd EPS",
-    "EPS성장%", "배당%", "52주최고", "52주최저", "애널목표가", "적정PER",
+    "EPS성장%", "52주최고", "52주최저", "애널목표가", "적정PER",
 ]
 
 def _github_token():
@@ -92,19 +92,12 @@ def fetch_one(ticker: str, market: str) -> dict:
     except Exception as e:
         return {"_error": str(e)}
 
-def pct(v):
-    """Return v as percent. yfinance returns fractions for some fields."""
-    if v is None:
-        return None
-    return v * 100 if abs(v) < 1 else v
-
 def compute_live(info: dict) -> dict:
     """Values yfinance can actually provide right now. None = not fetchable."""
     price = info.get("currentPrice") or info.get("regularMarketPrice")
     eps = info.get("trailingEps")
     fwd_eps = info.get("forwardEps")
     eps_growth = ((fwd_eps - eps) / abs(eps) * 100) if (fwd_eps and eps) else None
-    div = info.get("dividendYield")
     return {
         "현재가": price,
         "PER": info.get("trailingPE"),
@@ -114,7 +107,6 @@ def compute_live(info: dict) -> dict:
         "EPS": eps,
         "Fwd EPS": fwd_eps,
         "EPS성장%": eps_growth,
-        "배당%": pct(div) if div is not None else None,
         "52주최고": info.get("fiftyTwoWeekHigh"),
         "52주최저": info.get("fiftyTwoWeekLow"),
         "애널목표가": info.get("targetMeanPrice"),
@@ -152,18 +144,13 @@ def build_row(item: dict):
     upside_an = ((tgt / price - 1) * 100) if (tgt and price) else None
     upside_my = ((my_tgt / price - 1) * 100) if (my_tgt and price) else None
 
-    mcap = info.get("marketCap")
-    mcap_str = f"{mcap/1e12:.2f}T" if mcap and mcap > 1e12 else (f"{mcap/1e9:.1f}B" if mcap else None)
-
     row = {
-        "국가": "🇰🇷" if item.get("market") == "KR" else "🇺🇸",
         "종목": item.get("name", item["ticker"]),
         "티커": item["ticker"],
         "등락%": chg,
-        "시총": mcap_str,
         "애널상승%": upside_an,
         "내목표가": my_tgt,
-        "내상승%": upside_my,
+        "상승여력": upside_my,
         **resolved,
     }
     return row, is_override, error
@@ -193,17 +180,17 @@ def _js_cellstyle(col_key):
 COLUMN_FORMATS = {
     "현재가": (2, False), "PER": (1, False), "Fwd PER": (1, False),
     "PBR": (2, False), "PEG": (2, False), "EPS": (2, False), "Fwd EPS": (2, False),
-    "EPS성장%": (1, True), "배당%": (2, False), "등락%": (2, True),
+    "EPS성장%": (1, True), "등락%": (2, True),
     "52주최고": (2, False), "52주최저": (2, False),
     "애널목표가": (2, False), "애널상승%": (1, True),
-    "적정PER": (1, False), "내목표가": (2, False), "내상승%": (1, True),
+    "적정PER": (1, False), "내목표가": (2, False), "상승여력": (1, True),
 }
 
 COLUMN_ORDER = [
-    "국가", "종목", "티커", "현재가", "등락%", "시총",
-    "PER", "Fwd PER", "PBR", "PEG", "EPS", "Fwd EPS", "EPS성장%", "배당%",
+    "종목", "티커", "현재가", "등락%",
+    "PER", "Fwd PER", "PBR", "PEG", "EPS", "Fwd EPS", "EPS성장%",
     "52주최고", "52주최저", "애널목표가", "애널상승%",
-    "적정PER", "내목표가", "내상승%",
+    "적정PER", "내목표가", "상승여력",
 ]
 
 def render_table(items, empty_msg, table_key):
@@ -229,7 +216,7 @@ def render_table(items, empty_msg, table_key):
     gb = GridOptionsBuilder.from_dataframe(df)
     gb.configure_default_column(resizable=True, filter=False, sortable=True)
     for col in COLUMN_ORDER:
-        if col in ("국가", "종목", "티커", "시총"):
+        if col in ("종목", "티커"):
             gb.configure_column(col, editable=False)
             continue
         decimals, signed = COLUMN_FORMATS[col]
