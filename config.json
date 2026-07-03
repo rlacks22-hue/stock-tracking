@@ -20,7 +20,9 @@
       "ticker": "PLTR",
       "name": "팔란티어",
       "market": "US",
-      "overrides": {}
+      "overrides": {
+        "적정PER": 124.0
+      }
     },
     {
       "ticker": "005930",
