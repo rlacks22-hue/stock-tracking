@@ -168,14 +168,25 @@ def build_row(item: dict):
     return row, is_override, error
 
 # ---------- AgGrid helpers ----------
-def _js_fmt(decimals=2, signed=False):
+UP_TEXT = "#e03131"    # 상승 = 빨간 글씨
+DOWN_TEXT = "#1971c2"  # 하락 = 파란 글씨
+POS_BG = "#d3f9d8"     # 상승여력 + = 연두색
+NEG_BG = "#ffe3e9"     # 상승여력 - = 분홍색
+
+def _js_fmt(decimals=2, signed=False, market_aware=False, percent=False):
     sign_prefix = "(v >= 0 ? '+' : '') + " if signed else ""
+    unit = "'%'" if percent else "''"
+    decimals_expr = (
+        f"(params.data && params.data['_market'] === 'KR' ? 0 : {decimals})"
+        if market_aware else str(decimals)
+    )
     return JsCode(f"""
     function(params) {{
         var v = params.value;
         if (v === null || v === undefined || isNaN(v)) return '—';
-        var s = Number(v).toLocaleString(undefined, {{minimumFractionDigits: {decimals}, maximumFractionDigits: {decimals}}});
-        return {sign_prefix}s;
+        var d = {decimals_expr};
+        var s = Number(v).toLocaleString(undefined, {{minimumFractionDigits: d, maximumFractionDigits: d}});
+        return {sign_prefix}s + {unit};
     }}
     """)
 
@@ -189,6 +200,24 @@ def _js_cellstyle(col_key):
     }}
     """)
 
+def _js_text_color(pos_color, neg_color):
+    return JsCode(f"""
+    function(params) {{
+        var v = params.value;
+        if (v === null || v === undefined || isNaN(v)) return {{}};
+        return {{color: v >= 0 ? '{pos_color}' : '{neg_color}'}};
+    }}
+    """)
+
+def _js_bg_color(pos_color, neg_color):
+    return JsCode(f"""
+    function(params) {{
+        var v = params.value;
+        if (v === null || v === undefined || isNaN(v)) return {{}};
+        return {{backgroundColor: v >= 0 ? '{pos_color}' : '{neg_color}'}};
+    }}
+    """)
+
 COLUMN_FORMATS = {
     "현재가": (2, False), "PER": (1, False), "Fwd PER": (1, False),
     "PBR": (2, False), "PEG": (2, False), "EPS": (2, False), "Fwd EPS": (2, False),
@@ -197,6 +226,9 @@ COLUMN_FORMATS = {
     "애널목표가": (2, False), "애널상승%": (1, True),
     "적정PER": (1, False), "내목표가": (2, False), "상승여력": (1, True),
 }
+
+# 원화는 소수점을 쓰지 않으므로 KR 종목은 이 컬럼들만 정수로 표시
+PRICE_COLS = {"현재가", "52주최고", "52주최저", "애널목표가", "내목표가"}
 
 COLUMN_ORDER = [
     "종목", "티커", "현재가", "등락%",
@@ -224,6 +256,7 @@ def render_table(items, empty_msg, table_key):
     df = pd.DataFrame(rows)[COLUMN_ORDER]
     for col in EDITABLE_COLS:
         df[f"_ov_{col}"] = [f.get(col, False) for f in flags]
+    df["_market"] = [it.get("market", "US") for it in items]
 
     gb = GridOptionsBuilder.from_dataframe(df)
     gb.configure_default_column(resizable=True, filter=False, sortable=True)
@@ -238,13 +271,21 @@ def render_table(items, empty_msg, table_key):
         kwargs = dict(
             editable=editable,
             type=["numericColumn"],
-            valueFormatter=_js_fmt(decimals, signed),
+            valueFormatter=_js_fmt(
+                decimals, signed,
+                market_aware=(col in PRICE_COLS), percent=(col == "상승여력"),
+            ),
         )
         if editable:
             kwargs["cellStyle"] = _js_cellstyle(col)
+        elif col == "등락%":
+            kwargs["cellStyle"] = _js_text_color(UP_TEXT, DOWN_TEXT)
+        elif col == "상승여력":
+            kwargs["cellStyle"] = _js_bg_color(POS_BG, NEG_BG)
         gb.configure_column(col, **kwargs)
     for col in EDITABLE_COLS:
         gb.configure_column(f"_ov_{col}", hide=True)
+    gb.configure_column("_market", hide=True)
 
     grid_options = gb.build()
     response = AgGrid(
