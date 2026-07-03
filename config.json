@@ -46,6 +46,12 @@
           "name": "애플",
           "market": "US",
           "overrides": {}
+        },
+        {
+          "ticker": "AVGO",
+          "name": "브로드컴",
+          "market": "US",
+          "overrides": {}
         }
       ]
     }
