@@ -4,19 +4,19 @@
       "name": "포폴1",
       "items": [
         {
-          "ticker": "NVDA",
-          "name": "엔비디아",
-          "market": "US",
-          "overrides": {
-            "적정PER": 30.0
-          }
-        },
-        {
           "ticker": "MU",
           "name": "마이크론",
           "market": "US",
           "overrides": {
             "적정PER": 123.0
+          }
+        },
+        {
+          "ticker": "NVDA",
+          "name": "엔비디아",
+          "market": "US",
+          "overrides": {
+            "적정PER": 30.0
           }
         },
         {
