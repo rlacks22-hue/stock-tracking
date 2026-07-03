@@ -58,6 +58,12 @@
           "name": "tsmc",
           "market": "US",
           "overrides": {}
+        },
+        {
+          "ticker": "MSFT",
+          "name": "마소",
+          "market": "US",
+          "overrides": {}
         }
       ]
     }
