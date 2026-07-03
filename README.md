@@ -27,6 +27,19 @@ streamlit run app.py
 
 **주의**: 공개 저장소는 누구나 볼 수 있음. 개인 데이터라면 저장소를 private로 만들거나 Streamlit의 비밀번호 기능(secrets)을 추가하세요.
 
+### 클라우드 자동저장 설정 (선택, 추천)
+
+Streamlit Cloud는 앱이 재시작될 때마다 GitHub의 코드 상태로 초기화되므로, 배포된 사이트에서 사이드바로 종목을 추가/수정해도 기본적으로는 다음 재시작 때 사라집니다. 이를 막으려면 앱이 변경사항을 GitHub에 직접 커밋하도록 토큰을 설정하세요.
+
+1. GitHub → 우측 상단 프로필 → **Settings → Developer settings → Personal access tokens → Fine-grained tokens** → "Generate new token"
+2. Repository access를 `stock-tracking` 저장소로 제한, Permissions에서 **Contents: Read and write** 부여
+3. 생성된 토큰(`github_pat_...`) 복사
+4. Streamlit Cloud 앱 페이지 → 우측 하단 **⋮ → Settings → Secrets** 에 다음 입력:
+   ```
+   GITHUB_TOKEN = "여기에_토큰_붙여넣기"
+   ```
+5. 저장 후 앱 재시작 → 사이드바에 "☁️ 클라우드 자동저장 켜짐" 표시되면 성공
+
 ### 옵션 B: 집 컴퓨터 + Tailscale
 집 PC에서 streamlit을 계속 돌리고, Tailscale VPN으로 폰에서 접속. 무료. 이 방식이 궁금하시면 Claude Code에 부탁하세요.
 

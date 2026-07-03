@@ -9,11 +9,21 @@ import yfinance as yf
 import pandas as pd
 import json
 import os
+import base64
+import requests
 from datetime import datetime
 
 st.set_page_config(page_title="주식 대시보드", layout="wide", page_icon="📊")
 
 CONFIG_PATH = "config.json"
+GITHUB_REPO = "rlacks22-hue/stock-tracking"
+GITHUB_BRANCH = "chance-home"
+
+def _github_token():
+    try:
+        return st.secrets.get("GITHUB_TOKEN")
+    except Exception:
+        return None
 
 # ---------- Config I/O ----------
 def load_config():
@@ -22,9 +32,33 @@ def load_config():
             return json.load(f)
     return {"portfolio": [], "watchlist": []}
 
+def _push_config_to_github(cfg, token):
+    """Best-effort: commit config.json back to GitHub so changes survive
+    Streamlit Cloud restarts (the container filesystem resets from git)."""
+    api = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{CONFIG_PATH}"
+    headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github+json"}
+    try:
+        r = requests.get(api, headers=headers, params={"ref": GITHUB_BRANCH}, timeout=10)
+        sha = r.json().get("sha") if r.status_code == 200 else None
+        body = {
+            "message": "config.json 자동 업데이트 (대시보드에서 저장)",
+            "content": base64.b64encode(
+                json.dumps(cfg, ensure_ascii=False, indent=2).encode("utf-8")
+            ).decode("utf-8"),
+            "branch": GITHUB_BRANCH,
+        }
+        if sha:
+            body["sha"] = sha
+        requests.put(api, headers=headers, json=body, timeout=10)
+    except Exception:
+        pass  # local file is already saved; cloud sync is best-effort
+
 def save_config(cfg):
     with open(CONFIG_PATH, "w", encoding="utf-8") as f:
         json.dump(cfg, f, ensure_ascii=False, indent=2)
+    token = _github_token()
+    if token:
+        _push_config_to_github(cfg, token)
 
 # ---------- Data fetch ----------
 @st.cache_data(ttl=300, show_spinner=False)
@@ -121,6 +155,10 @@ cfg = load_config()
 
 with st.sidebar:
     st.header("⚙️ 종목 관리")
+    if _github_token():
+        st.caption("☁️ 클라우드 자동저장 켜짐")
+    else:
+        st.caption("💾 로컬 저장만 (재시작 시 초기화될 수 있음)")
     tabs = st.tabs(["포트폴리오", "관심종목"])
 
     for tab, key, label in [(tabs[0], "portfolio", "포트폴리오"), (tabs[1], "watchlist", "관심종목")]:
