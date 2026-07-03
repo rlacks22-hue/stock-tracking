@@ -29,6 +29,12 @@
       "name": "SK하이닉스",
       "market": "KR",
       "fair_per": null
+    },
+    {
+      "ticker": "AAPL",
+      "name": "애플",
+      "market": "US",
+      "fair_per": null
     }
   ],
   "watchlist": []
