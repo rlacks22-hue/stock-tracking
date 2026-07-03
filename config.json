@@ -52,6 +52,12 @@
           "name": "브로드컴",
           "market": "US",
           "overrides": {}
+        },
+        {
+          "ticker": "TSM",
+          "name": "tsmc",
+          "market": "US",
+          "overrides": {}
         }
       ]
     }
