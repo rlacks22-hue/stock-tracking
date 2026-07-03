@@ -259,8 +259,8 @@ def render_table(items, empty_msg, table_key):
     df["_market"] = [it.get("market", "US") for it in items]
 
     gb = GridOptionsBuilder.from_dataframe(df)
-    gb.configure_default_column(resizable=True, filter=False, sortable=True, minWidth=100, suppressSizeToFit=True)
-    gb.configure_column("종목", minWidth=110)
+    gb.configure_default_column(resizable=True, filter=False, sortable=True, minWidth=65)
+    gb.configure_column("종목", minWidth=85)
     gb.configure_grid_options(rowDragManaged=True, animateRows=True)
     gb.configure_selection(selection_mode="single", use_checkbox=False, suppressRowClickSelection=False)
     for col in COLUMN_ORDER:
@@ -293,7 +293,7 @@ def render_table(items, empty_msg, table_key):
         df, gridOptions=grid_options, key=f"aggrid_{table_key}",
         update_on=["cellValueChanged", "rowDragEnd", "selectionChanged"],
         data_return_mode=DataReturnMode.AS_INPUT,
-        allow_unsafe_jscode=True, fit_columns_on_grid_load=False,
+        allow_unsafe_jscode=True, fit_columns_on_grid_load=True,
         reload_data=True,
         height=min(60 + 42 * len(rows), 480),
     )
