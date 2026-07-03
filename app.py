@@ -280,16 +280,28 @@ def run_automation(cfg):
     st.rerun()
 
 # ---------- Chart ----------
-@st.cache_data(ttl=3600, show_spinner=False)
-def fetch_history(ticker: str, market: str, period: str) -> pd.DataFrame:
+PERIOD_OPTIONS = {
+    "1일": ("1d", "5m"),
+    "7일": ("7d", "30m"),
+    "30일": ("1mo", "1d"),
+    "6개월": ("6mo", "1wk"),
+    "1년": ("1y", "1wk"),
+    "3년": ("3y", "1wk"),
+    "5년": ("5y", "1wk"),
+}
+UP_COLOR = "#e74c3c"    # 상승 = 빨간색
+DOWN_COLOR = "#2980b9"  # 하락 = 파란색
+
+@st.cache_data(ttl=1800, show_spinner=False)
+def fetch_history(ticker: str, market: str, period: str, interval: str) -> pd.DataFrame:
     yf_symbol = f"{ticker}.KS" if market == "KR" else ticker
     try:
-        return yf.Ticker(yf_symbol).history(period=period, interval="1wk")
+        return yf.Ticker(yf_symbol).history(period=period, interval=interval)
     except Exception:
         return pd.DataFrame()
 
 def render_chart_section(cfg):
-    st.subheader("📈 주간 차트")
+    st.subheader("📈 차트")
     items = cfg["portfolio"] + cfg["watchlist"]
     if not items:
         st.info("왼쪽 사이드바에서 종목을 추가하면 차트를 볼 수 있습니다.")
@@ -300,24 +312,63 @@ def render_chart_section(cfg):
     with c1:
         label = st.selectbox("종목 선택", list(options.keys()))
     with c2:
-        period_map = {"6개월": "6mo", "1년": "1y", "3년": "3y", "5년": "5y"}
-        period_label = st.radio("기간", list(period_map.keys()), index=1, horizontal=True)
+        period_label = st.radio("기간", list(PERIOD_OPTIONS.keys()), index=4, horizontal=True)
 
     item = options[label]
-    df = fetch_history(item["ticker"], item.get("market", "US"), period_map[period_label])
+    period, interval = PERIOD_OPTIONS[period_label]
+    df = fetch_history(item["ticker"], item.get("market", "US"), period, interval)
     if df.empty:
         st.warning("차트 데이터를 불러오지 못했습니다.")
         return
 
-    fig = go.Figure(data=[go.Candlestick(
-        x=df.index, open=df["Open"], high=df["High"], low=df["Low"], close=df["Close"],
-        name=item["ticker"],
-    )])
+    ref_key = f"chart_ref_{item['ticker']}_{period_label}"
+    ref = st.session_state.get(ref_key)
+    cur_price = float(df["Close"].iloc[-1])
+
+    fig = go.Figure(data=[
+        go.Candlestick(
+            x=df.index, open=df["Open"], high=df["High"], low=df["Low"], close=df["Close"],
+            name=item["ticker"],
+            increasing_line_color=UP_COLOR, increasing_fillcolor=UP_COLOR,
+            decreasing_line_color=DOWN_COLOR, decreasing_fillcolor=DOWN_COLOR,
+        ),
+        go.Scatter(
+            x=df.index, y=df["Close"], mode="markers",
+            marker=dict(size=10, opacity=0), name="", hoverinfo="skip", showlegend=False,
+        ),
+    ])
+    if ref:
+        chg = (cur_price / ref["y"] - 1) * 100
+        fig.add_hline(
+            y=ref["y"], line_dash="dot", line_color="#888",
+            annotation_text=f"{ref['x']} · {ref['y']:,.2f} 대비 {chg:+.2f}%",
+            annotation_position="top left",
+        )
     fig.update_layout(
         xaxis_rangeslider_visible=False, height=450,
         margin=dict(l=10, r=10, t=30, b=10),
     )
-    st.plotly_chart(fig, use_container_width=True)
+    event = st.plotly_chart(
+        fig, use_container_width=True, on_select="rerun", selection_mode="points",
+        key=f"chart_widget_{item['ticker']}_{period_label}",
+    )
+
+    points = (event.get("selection") or {}).get("points") if event else None
+    if points:
+        pt = points[0]
+        new_ref = {"x": str(pt["x"]), "y": float(pt["y"])}
+        if new_ref != ref:
+            st.session_state[ref_key] = new_ref
+            st.rerun()
+
+    if ref:
+        chg = (cur_price / ref["y"] - 1) * 100
+        st.caption(f"📍 선택 시점({ref['x']}) 종가 {ref['y']:,.2f} → 현재가 {cur_price:,.2f} ({chg:+.2f}%)")
+        if st.button("선택 해제", key=f"clear_{ref_key}"):
+            del st.session_state[ref_key]
+            st.rerun()
+    else:
+        st.caption("💡 차트 위의 한 지점을 클릭하면 그 시점 대비 현재가 등락률을 볼 수 있습니다.")
 
 # ---------- Sidebar: manage stocks ----------
 cfg = load_config()
